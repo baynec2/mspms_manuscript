@@ -1,0 +1,630 @@
+---
+title: "Exploratory_Analysis"
+author: "Charlie Bayne"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+        theme: cosmo
+        toc: true
+        toc_depth: 6
+        toc_float:
+            collapsed: true
+            smooth_scroll: true
+        code_folding: hide
+        highlight: tango
+        df_print: paged
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+ggplot2::theme_set(ggplot2::theme_minimal())
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE, message = FALSE)
+```
+
+# Processing 
+
+
+```{r}
+# Insure reproducible results.
+set.seed(2)
+library(mspms)
+peaks_data = prepare_peaks("../data/proteomics/peaks_protein-peptides-lfq.csv",
+                           colData_filepath = "../data/proteomics/colData.csv")
+
+
+peaks_processed_qf = process_qf(peaks_data)
+peaks_tidy = mspms_tidy(peaks_processed_qf)
+```
+
+
+# Figure 1 - Overview of the mspms package
+
+## Figure 1A - Overview of Mspms package
+
+Generated in plot.IO
+
+
+## Figure 1B- Example plots?
+
+
+
+# Figure 2 - Overall clustering of data
+
+
+## Figure 2A - PCA 
+
+```{r,fig.height = 4, fig.width =6}
+fig2a = plot_pca(peaks_tidy)+
+  viridis::scale_color_viridis(discrete = TRUE)
+
+fig2a
+
+ggsave(fig2a,
+       filename = "../figures/Figure2_overall_clustering/A_PCA/fig2a.pdf",
+       width = 6,
+       height = 4)
+```
+
+
+## Figure 2B - unsupervised hierchical clustering of data 
+
+```{r,fig.height = 40, fig.width = 25}
+p1 = plot_heatmap(peaks_tidy)
+p1
+```
+
+saved as .png using the export to png button. 
+
+# Figure 3
+
+## Figure 3A - Table. Prepared in Word. 
+
+## Figure 3B - Volcano Plots
+
+```{r,fig.height = 11, fig.width =2.5}
+peaks_t_tests = log2fc_t_test(peaks_processed_qf)
+
+log2fc_threshold = 3
+
+fig3b <- peaks_t_tests %>%
+    dplyr::mutate(`log_10_p.adj` = -log10(.data$p.adj),
+                  time = as.factor(time)) %>%
+    ggplot2::ggplot(ggplot2::aes_string(x = "log2fc", y = "log_10_p.adj",color = "time")) +
+    ggplot2::geom_point(size = 0.5) +
+    ggplot2::geom_hline(
+      yintercept = -log10(0.05),
+      linetype = "dashed", color = "red"
+    ) +
+    ggplot2::geom_vline(
+      xintercept = log2fc_threshold,
+      linetype = "dashed", color = "red"
+    ) +
+    ggplot2::geom_vline(
+      xintercept = -log2fc_threshold,
+      linetype = "dashed", color = "red"
+    ) +
+    ggplot2::labs(x = "Log2 (Time TX/T0)", y = "-log10(p.adj value)") +
+  facet_wrap(~condition,ncol = 1)+
+  viridis::scale_color_viridis(discrete = TRUE)+
+  theme(legend.position = "none")+
+  geom_vline(xintercept = 0)
+
+ggplot2::theme_set(ggplot2::theme_minimal())
+
+fig3b
+
+ggsave(fig3b,filename = "../figures/Figure3_experimental_analysis/B/fig3b.pdf",
+       width = 2.5, height = 8)
+
+```
+
+## Figure 3C - Cleavage Positions 
+
+```{r,fig.height = 11, fig.width= 2.5}
+sig = peaks_t_tests %>% 
+  filter(p.adj <= 0.05, log2fc >3)
+
+d = plot_cleavages_per_pos(sig)
+
+fig3c =  plot_cleavages_per_pos(sig,ncol = 1 )+
+  viridis::scale_color_viridis(discrete = TRUE)+
+  theme(legend.position = "none")
+
+fig3c
+
+ggsave("../figures/Figure3_experimental_analysis/C/fig3c.pdf",fig3c, width = 2.5, height = 8)
+
+```
+
+
+
+## Figure 3D - Icelogos 
+
+```{r,fig.height = 11,fig.width = 3}
+fig3d = plot_all_icelogos(sig)
+
+fig3d
+
+ggsave("../figures/Figure3_experimental_analysis/D/fig3d.pdf",fig3d, 
+       width = 3,
+       height = 9)
+
+
+```
+
+# Supplementary Figures 
+
+## Figure S1 - Proteome Software Comparisons 
+
+
+```{r}
+library(mspms)
+################################################################################
+# Load Data
+################################################################################
+
+# Peaks 
+## Loaded in previous portion of document. 
+
+
+# Proteome Dicoverer 
+pd_processed = prepare_pd("../data/proteomics/pd_PeptideGroups.txt",
+                   colData_filepath = "../data/proteomics/pd_colData.csv") %>% 
+  process_qf()
+
+
+# Fragpipe 
+fp_processed = prepare_fragpipe("../data/proteomics/fragpipe_sub_analysis/combined_peptide_mbr_3.tsv",
+                               "../data/proteomics/colData.csv") %>% 
+  process_qf()
+
+
+```
+
+
+### A- Correlations
+
+```{r,fig.height = 2, fig.width = 8}
+################################################################################
+# Correlate Values at the Peptide Level. Only include peptides detected in both
+################################################################################
+
+
+peaks_tidy = mspms_tidy(peaks_processed_qf) %>% 
+  rename(peaks_values = peptides_norm) %>% 
+  select(peptide,quantCols, peaks_values,condition,group,time)
+
+
+# need to convert the pd file names to the consistent names as others. 
+
+nc = readxl::read_excel("../data/proteomics/pd_coldata_name_conversion.xlsx")
+
+pd_tidy = mspms_tidy(pd_processed) %>% 
+  inner_join(nc, by = c("quantCols" = "pd_quantCols")) %>% 
+  select(-quantCols) %>% 
+  rename(quantCols = quantCols.y) %>% 
+  rename(pd_values = peptides_norm) %>% 
+  select(peptide,quantCols,condition,group,time,pd_values)
+
+fp_tidy = mspms_tidy(fp_processed) %>% 
+   rename(fp_values = peptides_norm) %>% 
+   select(peptide,quantCols,condition,group,time,fp_values)
+
+
+all_tidy = inner_join(peaks_tidy,pd_tidy,fp_tidy,by = c("peptide","quantCols","condition","group","time"))
+
+all_tidy = inner_join(all_tidy,fp_tidy,by = c("peptide","quantCols","condition","group","time"))
+
+
+# Peaks vs PD 
+
+lm = lm(peaks_values~pd_values,data = all_tidy)
+
+R2 = round(summary(lm)$r.squared,2)
+
+
+S1a = all_tidy %>% 
+  ggplot(aes(peaks_values,pd_values))+
+  geom_point(size = 0.02,alpha = 0.2)+
+  geom_smooth(method = "lm")+
+  geom_abline(slope = 1, linetype = "dashed", color = "red")+
+  xlab("Peaks")+
+  ylab("Proteome Discoverer")+
+  ggtitle(bquote("R"^2*" = "*.(R2)))+
+    theme(plot.title = element_text(hjust = 0.5,size = 10),# Title text size
+        axis.title = element_text(size = 8))
+
+
+# Fragpipe vs PEAKS
+
+lm = lm(peaks_values~fp_values,data = all_tidy)
+
+R2 = round(summary(lm)$r.squared,2)
+
+
+S1b = all_tidy %>% 
+  ggplot(aes(peaks_values,fp_values))+
+  geom_point(size = 0.02,alpha = 0.2)+
+  geom_smooth(method = "lm")+
+  geom_abline(slope = 1, linetype = "dashed", color = "red")+
+   xlab("Peaks")+
+  ylab("Fragpipe")+
+  ggtitle(bquote("R"^2*" = "*.(R2)))+
+    theme(plot.title = element_text(hjust = 0.5,size = 10),# Title text size
+        axis.title = element_text(size = 8))
+
+
+
+# Proteome Discoverer vs Fragpipe
+
+lm = lm(pd_values~fp_values,data = all_tidy)
+
+R2 = round(summary(lm)$r.squared,2)
+
+
+S1c = all_tidy %>% 
+  ggplot(aes(fp_values,pd_values))+
+  geom_point(size = 0.02,alpha = 0.2)+
+  geom_smooth(method = "lm")+
+  geom_abline(slope = 1, linetype = "dashed", color = "red")+
+  xlab("Fragipe")+
+  ylab("Proteome Discoverer")+
+  ggtitle(bquote("R"^2*" = "*.(R2)))+
+  theme(plot.title = element_text(hjust = 0.5,size = 10),# Title text size
+        axis.title = element_text(size = 8))
+
+
+S1a = ggpubr::ggarrange(S1a,S1b,S1c,ncol = 3)
+
+S1a
+
+ggsave("../supplemental/S1_proteome_software_comparisons/S1a.pdf",S1a,height =2,
+       width = 8)
+```
+
+###B - Significant Peptide overlap
+
+```{r,fig.height = 9, fig.width = 2}
+################################################################################
+#Venn Diagram of Peptides that are signficant in each condition
+################################################################################
+
+# Running stats
+
+#peaks stats are already run above. 
+
+pd_stat = log2fc_t_test(pd_processed)
+
+fp_stat = log2fc_t_test(fp_processed)
+  
+  
+# Extracting significant peptides 
+  
+peaks_sig = peaks_t_tests %>% 
+  filter(p.adj <= 0.05, log2fc > 3) %>% 
+  mutate(group = paste0(condition," ",time, " min")) %>% 
+      dplyr::mutate(peptide_rm = gsub("^._","",peptide),
+                  peptide_rm = gsub("_.$","",peptide_rm),
+                  peptide_length = nchar(peptide_rm),
+                  tool = "Peaks") 
+  
+pd_sig = pd_stat %>% 
+    filter(p.adj <= 0.05, log2fc > 3) %>% 
+    mutate(group = paste0(condition," ",time, " min")) %>% 
+  dplyr::mutate(peptide_rm = gsub("^._","",peptide),
+                  peptide_rm = gsub("_.$","",peptide_rm),
+                  peptide_length = nchar(peptide_rm),
+                tool = "PD")
+  
+fp_sig  = fp_stat %>% 
+    filter(p.adj <= 0.05, log2fc > 3) %>% 
+  mutate(group = paste0(condition," ",time, " min")) %>% 
+  dplyr::mutate(peptide_rm = gsub("^._","",peptide),
+                  peptide_rm = gsub("_.$","",peptide_rm),
+                  peptide_length = nchar(peptide_rm),
+                tool = "Fragpipe")
+
+library(ggVennDiagram)
+
+groups_to_plot = c("Cathepsin A 90 min",
+                       "Cathepsin B 60 min",
+                       "Cathepsin C 90 min",
+                       "Cathepsin D 15 min")
+
+plot_list = list()
+
+for(i in unique(groups_to_plot)){
+  
+  peaks_f = peaks_sig %>% 
+    filter(group == i) %>% 
+    pull(peptide)
+  
+  pd_f = pd_sig %>% 
+    filter(group == i) %>% 
+    pull(peptide)
+  
+  fp_f = fp_sig %>% 
+    filter(group == i) %>% 
+    pull(peptide)
+  
+  
+  x <- list(Peaks=peaks_f,
+          PD=pd_f,
+          Fragpipe = fp_f)
+  
+ p1 =  ggVennDiagram(x,label_size = 3)+
+    ggtitle(gsub("[0-9].*","",i))+
+   scale_fill_distiller(palette = "GnBu")+
+   theme(legend.position = "none",
+         plot.title = element_text(size = 10,hjust = 0.5))
+
+ plot_list[[i]] <- p1
+  
+}
+
+S1b = ggpubr::ggarrange(plot_list[[1]],plot_list[[2]],plot_list[[3]],plot_list[[4]],ncol = 1)
+
+S1b
+
+ggsave("../supplemental/S1_proteome_software_comparisons/S1b.pdf",S1b, height = 9, width = 2)
+```
+
+
+
+###C - Cleavage Comparisons
+
+
+```{r,fig.width = 9, fig.height=6}
+peaks_cleavages = plot_cleavages_per_pos(peaks_sig)
+
+S1c1 = peaks_cleavages+
+  ggtitle("Peaks Studio")+
+  facet_wrap(~condition,ncol = 1,scale = "free_y")+
+  theme(legend.position = "none")+
+  scale_x_continuous(breaks = 1:13)+
+  theme(plot.title = element_text(hjust = 0.5,size = 10))+
+  scale_color_viridis_d()
+
+pd_cleavages = plot_cleavages_per_pos(pd_sig)
+
+
+S1c2 = pd_cleavages+
+  ggtitle("Proteome Discoverer")+
+  facet_wrap(~condition,ncol = 1,scale = "free_y")+
+  theme(legend.position = "none")+
+  scale_x_continuous(breaks = 1:14)+
+  theme(plot.title = element_text(hjust = 0.5,size = 10))+
+    scale_color_viridis_d()
+
+
+fp_cleavages = plot_cleavages_per_pos(fp_sig)
+
+S1c3 = fp_cleavages+
+  ggtitle("Fragpipe")+
+  facet_wrap(~condition,ncol = 1,scale = "free_y")+
+  theme(legend.position = "none")+
+    scale_x_continuous(breaks = 1:14)+
+    theme(plot.title = element_text(hjust = 0.5,size = 10),
+          axis.title = element_text(size = 10))+
+    scale_color_viridis_d()
+
+
+S1c = ggpubr::ggarrange(S1c1,S1c2,S1c3,ncol = 3)
+
+S1c
+
+ggsave("../supplemental/S1_proteome_software_comparisons/S1c.pdf",S1c,width = 6, height = 9)
+```
+
+#S2 Icelogo comparison 
+
+### IceLogo Comparisons
+
+```{r,fig.height = 11,fig.width = 8}
+peaks_icelogos = plot_all_icelogos(peaks_sig) %>% 
+  ggpubr::annotate_figure(top = "Peaks")
+
+
+pd_icelogos = plot_all_icelogos(pd_sig)%>% 
+  ggpubr::annotate_figure(top = "Proteome Discoverer")
+
+
+fp_icelogos = plot_all_icelogos(fp_sig) %>% 
+  ggpubr::annotate_figure(top = "Fragpipe")
+
+
+
+S2 = ggpubr::ggarrange(peaks_icelogos,pd_icelogos,fp_icelogos,common.legend = TRUE,ncol = 3)
+
+S2
+
+ggsave("../supplemental/S2_proteome_software_icelogos/S2_input.pdf",S2, width =8, height = 11)
+```
+
+
+## Figure S3- Size of Peptides Detected by Each Search Engine
+
+```{r,fig.height = 6, fig.width = 8}
+
+## Significant Peptides
+comb = bind_rows(peaks_sig,pd_sig,fp_sig) %>% 
+  group_by(peptide_length,condition,tool) %>% 
+  summarise(n = n())
+
+p1 = comb %>% 
+  ggplot(aes(x = peptide_length,y = n,fill = tool))+
+  geom_col()+
+  facet_wrap(~condition,scales = "free_y",ncol = 1)+
+  scale_x_continuous(breaks = 1:14)+
+  ggtitle("Significant Peptides")+
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5))
+
+p1
+
+peaks_sum_l = mspms_tidy(peaks_processed_qf,"peptides") %>% 
+  filter(!is.na(peptides)) %>% 
+  mutate(software = "Peaks")
+
+
+pd_sum_l = mspms_tidy(pd_processed,"peptides") %>% 
+  filter(!is.na(peptides)) %>% 
+  mutate(software = "PD")
+
+
+fp_sum_l = mspms_tidy(fp_processed,"peptides") %>% 
+    filter(!is.na(peptides)) %>% 
+  mutate(software = "Fragpipe")
+
+comb_2 = bind_rows(peaks_sum_l,pd_sum_l,fp_sum_l) %>% 
+  group_by(peptide_length,condition,software) %>% 
+  summarise(n = n())
+
+p2 = comb_2 %>% 
+  ggplot(aes(x = peptide_length,y = n,fill = software))+
+  geom_col()+
+  facet_wrap(~condition,scales = "free_y",ncol = 1)+
+  scale_x_continuous(breaks = 1:14)+
+  ggtitle("Detected Peptides")+
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5))
+
+
+S3 = ggpubr::ggarrange(p1,p2,common.legend = TRUE,legend = "bottom")
+
+S3
+
+ggsave("../supplemental/S3_proteome_software_peptide_lengths/S3.pdf",S3, width = 8, height = 6)
+```
+
+
+## Figure S4- QC checks
+
+### A - Full length peptide library detected at T0
+
+```{r,fig.height = 5.5, fig.width = 8}
+
+S4a = plot_qc_check(peaks_processed_qf) +
+  theme(legend.position = "bottom")
+
+ggsave("../supplemental/S4_qc_checks/S4a.pdf",S4a,width = 8,
+       height = 5.5)
+
+S4a
+```
+
+
+```{r,fig.height = 5.5, fig.width = 8}
+nd_peptides = plot_nd_peptides(peaks_processed_qf)
+
+S4b = plot_nd_peptides(peaks_processed_qf)
+
+S4b
+
+ggsave("../supplemental/S4_qc_checks/S4b.pdf",S4b,width = 8,
+       height = 5.5)
+```
+
+
+## Figure S5 - Number of signficant peptides per incubation time.
+
+```{r,fig.height =4, fig.width = 5}
+
+sum = sig %>% 
+  group_by(condition,time) %>% 
+  summarise(n = n())
+
+S5 = sum %>% 
+  ggplot(aes(time,n,color = condition))+
+  geom_point()+
+  geom_line(aes(group = condition))+
+  viridis::scale_color_viridis(discrete = TRUE)+
+  theme(legend.position = "bottom")+
+  xlab("Time (minutes)")+
+  ylab("Number of Peptides")
+
+S5
+
+ggsave("../supplemental/S5_sig_peptides_over_time/S5.pdf",S5,width = 5, height = 4)
+
+
+```
+
+
+
+## Figure S6 - Longer motif analysis 
+
+```{r,,fig.height = 11,fig.width = 6}
+# Running mspms with 6 residues to the left and right of the cleavage site reported
+peaks_prepared_6 = prepare_peaks(lfq_filepath = "../data/proteomics/peaks_protein-peptides-lfq.csv",
+                                   colData = "../data/proteomics/colData.csv",
+                                   n_residues = 6)
+
+# Calculating all possible cleavages 6 AAs to the left and right of the cleavage
+# site.
+cleavage_6 = mspms::calculate_all_cleavages(mspms::peptide_library$library_real_sequence,6)
+
+
+peaks_processed_6 = process_qf(peaks_prepared_6)
+
+peaks_ttest_6 = log2fc_t_test(peaks_processed_6)
+
+peaks_sig_6 = peaks_ttest_6 %>% 
+  filter(p.adj <= 0.05, 
+         log2fc >= 3)
+
+
+S6 = plot_all_icelogos(peaks_sig_6,
+                       background_universe = cleavage_6)
+
+S6
+
+
+ggsave("../supplemental/S6_longer_motif_analysis/S6.pdf",S6, height = 11,
+       width =6)
+
+```
+
+
+# S7 - mspms shiny interface.
+
+Created by taking screenshots of the mspms shiny app. 
+
+# SF6 - generic mspms analysis of cathepsin A-D data. 
+
+```{r,eval = FALSE}
+generate_report(peaks_prepared_data,
+                output_file = "SF6-generic_mspms_analysis_of_cathepsin_A-D.html",
+                outdir = "../supplemental/files/")
+```
+
+
+# Extra Stuff
+
+## What MBR setting would be best to use for Fragpipe? 
+
+Here we compared no MBR, a MBR across 3 runs, and MBR across 41 runs. 
+
+```{r}
+no_mbr = prepare_fragpipe("../data/proteomics/fragpipe_sub_analysis/combined_peptide_no_mbr.tsv",
+                               "../data/proteomics/colData.csv") %>%
+  process_qf()
+
+  
+mbr_3 = prepare_fragpipe("../data/proteomics/fragpipe_sub_analysis/combined_peptide_mbr_3.tsv",
+                               "../data/proteomics/colData.csv") %>%
+  process_qf()
+  
+mbr_41 = prepare_fragpipe("../data/proteomics/fragpipe_sub_analysis/combined_peptide_mbr_41.tsv",
+                               "../data/proteomics/colData.csv") %>%
+  process_qf()
+
+library(DEP)
+
+plot_missval(no_mbr[["peptides"]])
+plot_missval(mbr_3[["peptides"]])
+plot_missval(mbr_41[["peptides"]])
+
+```
+
+Based on this patterning, I think that it makes the most sense to used MBR- 3.
