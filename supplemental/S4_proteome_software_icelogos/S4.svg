@@ -10,7 +10,7 @@
    xml:space="preserve"
    inkscape:version="1.2 (dc2aeda, 2022-05-15)"
    sodipodi:docname="S4.svg"
-   inkscape:export-filename="S4.png"
+   inkscape:export-filename="S4.pdf"
    inkscape:export-xdpi="96"
    inkscape:export-ydpi="96"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -28,10 +28,10 @@
      inkscape:document-units="mm"
      showgrid="false"
      inkscape:zoom="0.78127806"
-     inkscape:cx="330.22814"
-     inkscape:cy="545.90039"
-     inkscape:window-width="1873"
-     inkscape:window-height="1027"
+     inkscape:cx="138.23504"
+     inkscape:cy="1142.359"
+     inkscape:window-width="1394"
+     inkscape:window-height="847"
      inkscape:window-x="46"
      inkscape:window-y="25"
      inkscape:window-maximized="0"
@@ -488,14 +488,14 @@
        id="text1574"><tspan
          x="0"
          y="0"
-         id="tspan3039">Peaks</tspan></text></g><text
+         id="tspan7272">Peaks</tspan></text></g><text
      xml:space="preserve"
      transform="matrix(0.35277776,0,0,0.35277778,71.901918,2.3467204)"
      style="font-variant:normal;font-weight:normal;font-size:32px;font-family:Helvetica;-inkscape-font-specification:Helvetica;writing-mode:lr-tb;white-space:pre;inline-size:164.721;display:inline;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none"
      id="text3068"><tspan
        x="0"
        y="30.089172"
-       id="tspan3041">PD</tspan></text><g
+       id="tspan7274">PD</tspan></text><g
      id="g4568"
      transform="matrix(0.35277776,0,0,-0.35277778,-52.765443,286.80207)"><text
        xml:space="preserve"
@@ -504,7 +504,7 @@
        id="text4572"><tspan
          x="0"
          y="0"
-         id="tspan3043">Fragpipe</tspan></text></g><g
+         id="tspan7276">Fragpipe</tspan></text></g><g
      id="g4568-0"
      transform="matrix(0.35277776,0,0,-0.35277778,-8.0501192,286.90404)"><text
        xml:space="preserve"
@@ -513,7 +513,7 @@
        id="text4572-4"><tspan
          x="0"
          y="0"
-         id="tspan3045">Sage</tspan></text></g><g
+         id="tspan7278">Sage</tspan></text></g><g
      id="g11491"
      transform="matrix(0.93235712,0,0,0.93235712,-51.732136,22.24076)"><g
        id="g81762-5"
@@ -524,7 +524,7 @@
          id="text81766-5"><tspan
            x="0"
            y="10.343153"
-           id="tspan3047">Chemistry</tspan></text></g><g
+           id="tspan7280">Chemistry</tspan></text></g><g
        id="g105644"
        transform="translate(-0.32890366,3.6179402)"><g
          id="g94536"
