@@ -1,0 +1,96 @@
+{
+    "database": {
+      "bucket_size": 8192,
+      "enzyme": {
+        "missed_cleavages": 0,
+        "min_len": 5,
+        "max_len": 14,
+        "cleave_at": "",
+        "c_terminal": true
+      },
+      "peptide_min_mass": 100,
+      "peptide_max_mass": 5000.0,
+      "ion_kinds": ["b", "y"],
+      "min_ion_index": 2,
+      "static_mods": {
+      },
+      "max_variable_mods": 0,
+      "decoy_tag": "rev_",
+      "generate_decoys": true
+    },
+    "quant": {
+      "lfq": true,
+      "lfq_settings": {
+        "peak_scoring": "Hybrid",
+        "integration": "Sum",
+        "spectral_angle": 0.7,
+        "ppm_tolerance": 5.0,
+        "mobility_pct_tolerance": 3.0
+      }
+    },
+    "precursor_tol": {
+      "da": [
+        -10.0,
+        10.0
+      ]
+    },
+    "fragment_tol": {
+      "ppm": [
+       -10,
+       10
+      ]
+    },
+    "precursor_charge": [2, 4],
+    "deisotope": true,
+    "chimera": false,
+    "wide_window": false,
+    "min_peaks": 15,
+    "max_peaks": 150,
+    "min_matched_peaks": 4,
+    "max_fragment_charge": 1,
+    "report_psms": 1,
+   "mzml_paths": [
+"mzmL_files/CatA_0000_1.mzML",
+"mzmL_files/CatA_0000_2.mzML",
+"mzmL_files/CatA_0000_3.mzML",
+"mzmL_files/CatA_0000_4.mzML",
+"mzmL_files/CatA_0030_1.mzML",
+"mzmL_files/CatA_0030_2.mzML",
+"mzmL_files/CatA_0030_3.mzML",
+"mzmL_files/CatA_0030_4.mzML",
+"mzmL_files/CatA_0090_1.mzML",
+"mzmL_files/CatA_0090_2.mzML",
+"mzmL_files/CatA_0090_3.mzML",
+"mzmL_files/CatA_0090_4.mzML",
+"mzmL_files/CatB_0000_1.mzML",
+"mzmL_files/CatB_0000_2.mzML",
+"mzmL_files/CatB_0000_3.mzML",
+"mzmL_files/CatB_0000_4.mzML",
+"mzmL_files/CatB_0015_1.mzML",
+"mzmL_files/CatB_0015_2.mzML",
+"mzmL_files/CatB_0015_3.mzML",
+"mzmL_files/CatB_0015_4.mzML",
+"mzmL_files/CatB_0060_1.mzML",
+"mzmL_files/CatB_0060_2.mzML",
+"mzmL_files/CatB_0060_3.mzML",
+"mzmL_files/CatB_0060_4.mzML",
+"mzmL_files/CatC_0000_1.mzML",
+"mzmL_files/CatC_0000_2.mzML",
+"mzmL_files/CatC_0000_3.mzML",
+"mzmL_files/CatC_0000_4.mzML",
+"mzmL_files/CatC_0030_1.mzML",
+"mzmL_files/CatC_0030_2.mzML",
+"mzmL_files/CatC_0030_3.mzML",
+"mzmL_files/CatC_0030_4.mzML",
+"mzmL_files/CatC_0090_1.mzML",
+"mzmL_files/CatC_0090_2.mzML",
+"mzmL_files/CatC_0090_3.mzML",
+"mzmL_files/CatC_0090_4.mzML",
+"mzmL_files/CatD_0000_1.mzML",
+"mzmL_files/CatD_0000_2.mzML",
+"mzmL_files/CatD_0015_1.mzML",
+"mzmL_files/CatD_0015_2.mzML",
+"mzmL_files/CatD_0015_3.mzML",
+"mzmL_files/CatD_0015_4.mzML"
+  ]
+  }

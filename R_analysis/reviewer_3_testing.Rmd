@@ -1,0 +1,214 @@
+---
+title: "Exploratory_Analysis"
+author: "Charlie Bayne"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+        theme: cosmo
+        toc: true
+        toc_depth: 6
+        toc_float:
+            collapsed: true
+            smooth_scroll: true
+        code_folding: hide
+        highlight: tango
+        df_print: paged
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+ggplot2::theme_set(ggplot2::theme_minimal())
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE, message = FALSE)
+```
+
+# Processing R log transformed data
+
+```{r,eval = FALSE}
+#peaks_data = prepare_peaks("../data/proteomics/peaks_protein-peptides-lfq.csv",
+#                          colData_filepath = "../data/proteomics/colData_limma.csv")
+
+
+#peaks_processed_qf = process_qf(peaks_data)
+#peaks_tidy = mspms_tidy(peaks_processed_qf)
+
+#peaks_t_tests = log2fc_t_test(peaks_processed_qf)
+
+#write_csv(peaks_t_tests,"peaks_rl2_t_test_results.csv")
+```
+
+
+
+```{r}
+# Insure reproducible results.
+set.seed(2)
+library(mspms)
+peaks_data = prepare_peaks("../data/proteomics/peaks_protein-peptides-lfq.csv",
+                           colData_filepath = "../data/proteomics/colData_limma.csv")
+
+
+peaks_processed_qf = process_qf(peaks_data)
+peaks_tidy = mspms_tidy(peaks_processed_qf)
+```
+
+## Cleavage positions with T-tests using non log2 transformed values
+
+```{r,fig.height = 11, fig.width= 2.5}
+
+peaks_t_tests = log2fc_t_test(peaks_processed_qf)
+
+sig = peaks_t_tests %>% 
+  filter(p.adj <= 0.05, log2fc >1)
+
+d = plot_cleavages_per_pos(sig) 
+
+fig3c =  plot_cleavages_per_pos(sig,ncol = 1 )+
+  viridis::scale_color_viridis(discrete = TRUE)+
+  theme(legend.position = "none")
+
+fig3c
+
+```
+Clearly, this produces different results for cathepsin D specificially. 
+
+# Looking at the peptides found signficant using rl2t method
+
+```{r}
+rl2_stats <- readr::read_csv("peaks_rl2_t_test_results.csv")
+
+rl2_sig <- rl2_stats %>% 
+  filter(condition == "cathepsin_D") %>% 
+  filter(p.adj <= 0.05) %>% 
+  filter(log2fc > 3)
+
+
+rl2_sig_peptids = rl2_sig %>% 
+  pull(peptide)
+
+
+rl2_sig_peptids <- rl2_sig_peptids[1:10]
+
+p <- mspms::mspms_tidy(peaks_processed_qf,"peptides_log") 
+
+
+
+filtered_long <- p %>% 
+  dplyr::filter(peptide %in% rl2_sig_peptids,
+                condition == "cathepsin_D")
+
+p1 = filtered_long %>% 
+  ggplot(aes(time,peptides_log))+
+  geom_point()+
+  facet_wrap(~peptide)
+
+p1
+
+
+  
+p <- mspms::mspms_tidy(peaks_processed_qf,"peptides_log_impute_norm") 
+
+
+
+filtered_long <- p %>% 
+  dplyr::filter(peptide %in% rl2_sig_peptids,
+                condition == "cathepsin_D")
+
+p1 = filtered_long %>% 
+  ggplot(aes(time,peptides_log_impute_norm))+
+  geom_point()+
+  facet_wrap(~peptide)
+
+p1
+
+
+
+p <- mspms::mspms_tidy(peaks_processed_qf,"peptides_norm") 
+
+
+
+filtered_long <- p %>% 
+  dplyr::filter(peptide %in% rl2_sig_peptids,
+                condition == "cathepsin_D")
+
+p1 = filtered_long %>% 
+  ggplot(aes(time,peptides_norm))+
+  geom_point()+
+  facet_wrap(~peptide)
+
+p1
+
+
+```
+
+
+```{r}
+rl2_f_stats <- peaks_t_tests %>% 
+  dplyr::filter(condition == "cathepsin_D") %>% 
+  dplyr::filter(peptide %in% rl2_sig_peptids)
+
+
+f_stats <- peaks_t_tests %>% 
+  dplyr::filter(condition == "cathepsin_D") %>% 
+  dplyr::filter(p.adj <= 0.05) #%>% 
+  #dplyr::filter(log2fc > 3)
+```
+
+
+```{r}
+
+p <- mspms::mspms_tidy(peaks_processed_qf,"peptides_log") 
+
+
+
+
+p1 = p %>% 
+  ggplot(aes(peptides_log,color = as.factor(condition)))+
+  geom_density()+
+  facet_wrap(~cleavage_pos)
+
+p1
+
+
+
+
+
+
+
+
+p1 = p %>% 
+  dplyr::filter(condition == "cathepsin_D") %>% 
+  ggplot(aes(peptides_log,color = as.factor(time)))+
+  geom_density()+
+  facet_wrap(~cleavage_pos)
+
+p1
+
+
+p <- mspms::mspms_tidy(peaks_processed_qf,"peptides_log_impute_norm") 
+
+
+
+p1 = p %>% 
+  dplyr::filter(condition == "cathepsin_D") %>% 
+  ggplot(aes(peptides_log_impute_norm,color = as.factor(time)))+
+  geom_density()+
+  facet_wrap(~cleavage_pos)
+
+p1
+
+
+
+p1 = p %>% 
+  dplyr::filter(condition == "cathepsin_A") %>% 
+  ggplot(aes(peptides_log_impute_norm,color = as.factor(time)))+
+  geom_density()+
+  facet_wrap(~cleavage_pos)
+
+p1
+
+
+
+
+```
+
+
+

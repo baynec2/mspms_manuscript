@@ -1,5 +1,5 @@
 ---
-title: "Exploratory_Analysis"
+title: "Mspms_Manusript_Analysis"
 author: "Charlie Bayne"
 date: "`r Sys.Date()`"
 output:
@@ -29,7 +29,7 @@ knitr::opts_chunk$set(echo = TRUE,warning = FALSE, message = FALSE)
 set.seed(2)
 library(mspms)
 peaks_data = prepare_peaks("../data/proteomics/peaks_protein-peptides-lfq.csv",
-                           colData_filepath = "../data/proteomics/colData.csv")
+                           colData_filepath = "../data/proteomics/colData_limma.csv")
 
 
 peaks_processed_qf = process_qf(peaks_data)
@@ -82,11 +82,11 @@ saved as .png using the export to png button.
 ## Figure 3B - Volcano Plots
 
 ```{r,fig.height = 11, fig.width =2.5}
-peaks_t_tests = log2fc_t_test(peaks_processed_qf)
+peaks_stat = limma_stats(peaks_processed_qf)
 
 log2fc_threshold = 3
 
-fig3b <- peaks_t_tests %>%
+fig3b <- peaks_stat %>%
     dplyr::mutate(`log_10_p.adj` = -log10(.data$p.adj),
                   time = as.factor(time)) %>%
     ggplot2::ggplot(ggplot2::aes_string(x = "log2fc", y = "log_10_p.adj",color = "time")) +
@@ -118,13 +118,23 @@ ggsave(fig3b,filename = "../figures/Figure3_experimental_analysis/B/fig3b.pdf",
 
 ```
 
+
+```{r}
+# Counting number on request of reviewer 3 to add to text
+
+count_peak = peaks_stat %>% dplyr::filter(p.adj <= 0.05,
+                                          log2fc > 3) %>% 
+  group_by(condition,time) %>% 
+  summarise(n = n())
+```
+
 ## Figure 3C - Cleavage Positions 
 
 ```{r,fig.height = 11, fig.width= 2.5}
-sig = peaks_t_tests %>% 
+sig = peaks_stat %>% 
   filter(p.adj <= 0.05, log2fc >3)
 
-d = plot_cleavages_per_pos(sig)
+d = plot_cleavages_per_pos(sig) 
 
 fig3c =  plot_cleavages_per_pos(sig,ncol = 1 )+
   viridis::scale_color_viridis(discrete = TRUE)+
@@ -135,7 +145,6 @@ fig3c
 ggsave("../figures/Figure3_experimental_analysis/C/fig3c.pdf",fig3c, width = 2.5, height = 8)
 
 ```
-
 
 
 ## Figure 3D - Icelogos 
@@ -154,8 +163,61 @@ ggsave("../figures/Figure3_experimental_analysis/D/fig3d.pdf",fig3d,
 
 # Supplementary Figures 
 
-## Figure S1 - Proteome Software Comparisons 
+## Figure S1- QC checks
 
+### A - Full length peptide library detected at T0
+
+```{r,fig.height = 5.5, fig.width = 8}
+
+S1a = plot_qc_check(peaks_processed_qf) +
+  theme(legend.position = "bottom")
+
+ggsave("../supplemental/S1_qc_checks/S1a.pdf",S1a,width = 8,
+       height = 5.5)
+
+S1a
+```
+
+
+```{r,fig.height = 5.5, fig.width = 8}
+nd_peptides = plot_nd_peptides(peaks_processed_qf)
+
+S1b = plot_nd_peptides(peaks_processed_qf)
+
+S1b
+
+ggsave("../supplemental/S1_qc_checks/S1b.pdf",S1b,width = 8,
+       height = 5.5)
+```
+
+## Figure S2 - Number of signficant peptides per incubation time.
+
+```{r,fig.height =4, fig.width = 5}
+
+sum = sig %>% 
+  group_by(condition,time) %>% 
+  summarise(n = n()) %>% 
+  mutate(condition = as.factor(condition))
+
+
+
+S5 = sum %>% 
+  ggplot(aes(time,n,color = condition))+
+  geom_point()+
+  geom_line(aes(group = condition))+
+  viridis::scale_color_viridis(discrete = TRUE)+
+  theme(legend.position = "bottom")+
+  xlab("Time (minutes)")+
+  ylab("Number of Peptides")
+
+S5
+
+ggsave("../supplemental/S2_sig_peptides_over_time/S2.pdf",S5,width = 5, height = 4)
+
+
+```
+
+## Figure S3 - Proteome Software Comparisons 
 
 ```{r}
 library(mspms)
@@ -175,198 +237,251 @@ pd_processed = prepare_pd("../data/proteomics/pd_PeptideGroups.txt",
 
 # Fragpipe 
 fp_processed = prepare_fragpipe("../data/proteomics/fragpipe_sub_analysis/combined_peptide_mbr_3.tsv",
-                               "../data/proteomics/colData.csv") %>% 
+                               "../data/proteomics/colData_limma.csv") %>% 
   process_qf()
 
+
+
+#Sage 
+
+sage_processed = mspms::prepare_sage("../data/proteomics/sage_lfq.tsv",
+                                     "../data/proteomics/colData_limma.csv") %>% 
+  process_qf()
 
 ```
 
 
 ### A- Correlations
 
-```{r,fig.height = 2, fig.width = 8}
+```{r,fig.height = 4, fig.width = 8}
 ################################################################################
-# Correlate Values at the Peptide Level. Only include peptides detected in both
+# Correlate Values at the Peptide Level — Only include peptides detected in all
 ################################################################################
 
+# PEAKS
+peaks_tidy <- mspms_tidy(peaks_processed_qf,"peptides_log") |>
+  filter(!is.na(peptides_log)) %>% 
+  group_by(peptide,group,condition,time) %>% 
+  summarise(peaks_values = mean(peptides_log))
 
-peaks_tidy = mspms_tidy(peaks_processed_qf) %>% 
-  rename(peaks_values = peptides_norm) %>% 
-  select(peptide,quantCols, peaks_values,condition,group,time)
+# Proteome Discoverer (name conversion)
+nc <- readxl::read_excel("../data/proteomics/pd_coldata_name_conversion.xlsx")
 
+pd_tidy <- mspms_tidy(pd_processed,"peptides_log") |>
+  filter(!is.na(peptides_log)) %>% 
+  inner_join(nc, by = c("quantCols" = "pd_quantCols")) |>
+  group_by(peptide,group,condition,time) %>% 
+  summarise(pd_values = mean(peptides_log))
 
-# need to convert the pd file names to the consistent names as others. 
+# FragPipe
+fp_tidy <- mspms_tidy(fp_processed,"peptides_log") |>
+  filter(!is.na(peptides_log)) %>% 
+  group_by(peptide,group,condition,time) %>% 
+  summarise(fp_values = mean(peptides_log))
 
-nc = readxl::read_excel("../data/proteomics/pd_coldata_name_conversion.xlsx")
+# Sage
+sage_tidy <- mspms_tidy(sage_processed,"peptides_log") |>
+  filter(!is.na(peptides_log)) %>% 
+  group_by(peptide,group,condition,time) %>% 
+  summarise(sage_values = mean(peptides_log))
 
-pd_tidy = mspms_tidy(pd_processed) %>% 
-  inner_join(nc, by = c("quantCols" = "pd_quantCols")) %>% 
-  select(-quantCols) %>% 
-  rename(quantCols = quantCols.y) %>% 
-  rename(pd_values = peptides_norm) %>% 
-  select(peptide,quantCols,condition,group,time,pd_values)
+# Combine datasets (intersection only)
+all_tidy <- peaks_tidy |>
+  inner_join(pd_tidy, by = c("peptide", "condition", "group", "time")) |>
+  inner_join(fp_tidy, by = c("peptide","condition", "group", "time")) |>
+  inner_join(sage_tidy, by = c("peptide", "condition", "group", "time"))
 
-fp_tidy = mspms_tidy(fp_processed) %>% 
-   rename(fp_values = peptides_norm) %>% 
-   select(peptide,quantCols,condition,group,time,fp_values)
+# Optionally replace 0s with NA (if they represent missing signal)
+all_tidy <- all_tidy |>
+  mutate(across(ends_with("_values"), ~na_if(., 0))) %>% 
+  mutate(peptide_length = as.factor(nchar(gsub("(^.|.$)_?", "", peptide))))
+################################################################################
+# Correlations
+################################################################################
 
-
-all_tidy = inner_join(peaks_tidy,pd_tidy,fp_tidy,by = c("peptide","quantCols","condition","group","time"))
-
-all_tidy = inner_join(all_tidy,fp_tidy,by = c("peptide","quantCols","condition","group","time"))
-
-
-# Peaks vs PD 
-
-lm = lm(peaks_values~pd_values,data = all_tidy)
-
-R2 = round(summary(lm)$r.squared,2)
-
-
-S1a = all_tidy %>% 
-  ggplot(aes(peaks_values,pd_values))+
-  geom_point(size = 0.02,alpha = 0.2)+
-  geom_smooth(method = "lm")+
-  geom_abline(slope = 1, linetype = "dashed", color = "red")+
-  xlab("Peaks")+
-  ylab("Proteome Discoverer")+
-  ggtitle(bquote("R"^2*" = "*.(R2)))+
-    theme(plot.title = element_text(hjust = 0.5,size = 10),# Title text size
+# Common plotting theme
+theme_common <- theme_minimal(base_size = 8) +
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
         axis.title = element_text(size = 8))
 
+# Helper function for repeated correlations
+plot_correlation <- function(df, x, y, label_x, label_y, color = NULL) {
+  lm_model <- lm(reformulate(x, y), data = df)
+  R2 <- round(summary(lm_model)$r.squared, 2)
+  ggplot(df, aes_string(x, y,color = color)) +
+    geom_point(size = 0.02, alpha = 0.2) +
+    geom_smooth(method = "lm", se = FALSE) +
+    geom_abline(slope = 1, linetype = "dashed", color = "red") +
+    labs(x = label_x, y = label_y, title = bquote("R"^2*" = "*.(R2))) +
+    theme_common
+}
 
-# Fragpipe vs PEAKS
+################################################################################
+# Pairwise comparisons (PEAKS, PD, FP, SAGE)
+################################################################################
 
-lm = lm(peaks_values~fp_values,data = all_tidy)
+# PEAKS vs PD
+p1 <- plot_correlation(all_tidy, "peaks_values", "pd_values", "PEAKS", "Proteome Discoverer")
 
-R2 = round(summary(lm)$r.squared,2)
+# PEAKS vs FragPipe
+p2 <- plot_correlation(all_tidy, "peaks_values", "fp_values", "PEAKS", "FragPipe")
 
+# PEAKS vs Sage
+p3 <- plot_correlation(all_tidy, "peaks_values", "sage_values", "PEAKS", "Sage")
 
-S1b = all_tidy %>% 
-  ggplot(aes(peaks_values,fp_values))+
-  geom_point(size = 0.02,alpha = 0.2)+
-  geom_smooth(method = "lm")+
-  geom_abline(slope = 1, linetype = "dashed", color = "red")+
-   xlab("Peaks")+
-  ylab("Fragpipe")+
-  ggtitle(bquote("R"^2*" = "*.(R2)))+
-    theme(plot.title = element_text(hjust = 0.5,size = 10),# Title text size
-        axis.title = element_text(size = 8))
+# Proteome Discoverer vs FragPipe
+p4 <- plot_correlation(all_tidy, "pd_values", "fp_values", "Proteome Discoverer", "FragPipe")
 
+# Proteome Discoverer vs Sage
+p5 <- plot_correlation(all_tidy, "pd_values", "sage_values", "Proteome Discoverer", "Sage")
 
-
-# Proteome Discoverer vs Fragpipe
-
-lm = lm(pd_values~fp_values,data = all_tidy)
-
-R2 = round(summary(lm)$r.squared,2)
-
-
-S1c = all_tidy %>% 
-  ggplot(aes(fp_values,pd_values))+
-  geom_point(size = 0.02,alpha = 0.2)+
-  geom_smooth(method = "lm")+
-  geom_abline(slope = 1, linetype = "dashed", color = "red")+
-  xlab("Fragipe")+
-  ylab("Proteome Discoverer")+
-  ggtitle(bquote("R"^2*" = "*.(R2)))+
-  theme(plot.title = element_text(hjust = 0.5,size = 10),# Title text size
-        axis.title = element_text(size = 8))
+# FragPipe vs Sage
+p6 <- plot_correlation(all_tidy, "fp_values", "sage_values", "FragPipe", "Sage")
 
 
-S1a = ggpubr::ggarrange(S1a,S1b,S1c,ncol = 3)
+################################################################################
+# Arrange and save figure
+################################################################################
 
-S1a
+S3_combined <- ggpubr::ggarrange(
+  p1, p2, p3,
+  p4, p5, p6,
+  ncol = 3, nrow = 2
+)
 
-ggsave("../supplemental/S1_proteome_software_comparisons/S1a.pdf",S1a,height =2,
-       width = 8)
+S3_combined
+
+ggsave("../supplemental/S3_proteome_software_comparisons/S3a.pdf",
+       S3_combined, height = 2, width = 8)
 ```
 
 ###B - Significant Peptide overlap
 
-```{r,fig.height = 9, fig.width = 2}
+```{r,fig.height = 9, fig.width = 5}
 ################################################################################
-#Venn Diagram of Peptides that are signficant in each condition
+# Venn Diagram of Peptides that are significant in each condition
 ################################################################################
 
-# Running stats
+# Run differential stats for all tools
+# (peaks stats already computed earlier)
+pd_stat <- limma_stats(pd_processed)
+fp_stat <- limma_stats(fp_processed)
+sage_stat <- limma_stats(sage_processed)
 
-#peaks stats are already run above. 
 
-pd_stat = log2fc_t_test(pd_processed)
+pd_stat <- mspms::limma_stats(pd_processed)
+fp_stat <- mspms::limma_stats(fp_processed)
+sage_stat <- mspms::limma_stats(sage_processed)
+# Extract significant peptides
+peaks_sig <- peaks_stat %>%
+  filter(p.adj <= 0.05, log2fc > 3) %>%
+  mutate(group = paste0(condition, " ", time, " min")) %>%
+  mutate(
+    peptide_rm = gsub("^._", "", peptide),
+    peptide_rm = gsub("_.$", "", peptide_rm),
+    peptide_length = nchar(peptide_rm),
+    tool = "PEAKS"
+  )
 
-fp_stat = log2fc_t_test(fp_processed)
-  
-  
-# Extracting significant peptides 
-  
-peaks_sig = peaks_t_tests %>% 
-  filter(p.adj <= 0.05, log2fc > 3) %>% 
-  mutate(group = paste0(condition," ",time, " min")) %>% 
-      dplyr::mutate(peptide_rm = gsub("^._","",peptide),
-                  peptide_rm = gsub("_.$","",peptide_rm),
-                  peptide_length = nchar(peptide_rm),
-                  tool = "Peaks") 
-  
-pd_sig = pd_stat %>% 
-    filter(p.adj <= 0.05, log2fc > 3) %>% 
-    mutate(group = paste0(condition," ",time, " min")) %>% 
-  dplyr::mutate(peptide_rm = gsub("^._","",peptide),
-                  peptide_rm = gsub("_.$","",peptide_rm),
-                  peptide_length = nchar(peptide_rm),
-                tool = "PD")
-  
-fp_sig  = fp_stat %>% 
-    filter(p.adj <= 0.05, log2fc > 3) %>% 
-  mutate(group = paste0(condition," ",time, " min")) %>% 
-  dplyr::mutate(peptide_rm = gsub("^._","",peptide),
-                  peptide_rm = gsub("_.$","",peptide_rm),
-                  peptide_length = nchar(peptide_rm),
-                tool = "Fragpipe")
+pd_sig <- pd_stat %>%
+  filter(p.adj <= 0.05, log2fc > 3) %>%
+  mutate(group = paste0(condition, " ", time, " min")) %>%
+  mutate(
+    peptide_rm = gsub("^._", "", peptide),
+    peptide_rm = gsub("_.$", "", peptide_rm),
+    peptide_length = nchar(peptide_rm),
+    tool = "PD"
+  )
+
+fp_sig <- fp_stat %>%
+  filter(p.adj <= 0.05, log2fc > 3) %>%
+  mutate(group = paste0(condition, " ", time, " min")) %>%
+  mutate(
+    peptide_rm = gsub("^._", "", peptide),
+    peptide_rm = gsub("_.$", "", peptide_rm),
+    peptide_length = nchar(peptide_rm),
+    tool = "FragPipe"
+  )
+
+sage_sig <- sage_stat %>%
+  filter(p.adj <= 0.05, log2fc > 3) %>%
+  mutate(group = paste0(condition, " ", time, " min")) %>%
+  mutate(
+    peptide_rm = gsub("^._", "", peptide),
+    peptide_rm = gsub("_.$", "", peptide_rm),
+    peptide_length = nchar(peptide_rm),
+    tool = "Sage"
+  )
+
+################################################################################
+# Generate Venn diagrams per condition
+################################################################################
 
 library(ggVennDiagram)
 
-groups_to_plot = c("Cathepsin A 90 min",
-                       "Cathepsin B 60 min",
-                       "Cathepsin C 90 min",
-                       "Cathepsin D 15 min")
+groups_to_plot <- c(
+  "cathepsin_A 90 min",
+  "cathepsin_B 60 min",
+  "cathepsin_C 90 min",
+  "cathepsin_D 15 min"
+)
 
-plot_list = list()
+plot_list <- list()
 
-for(i in unique(groups_to_plot)){
+for (i in groups_to_plot) {
   
-  peaks_f = peaks_sig %>% 
-    filter(group == i) %>% 
+  peaks_f <- peaks_sig %>%
+    filter(group == i) %>%
     pull(peptide)
   
-  pd_f = pd_sig %>% 
-    filter(group == i) %>% 
+  pd_f <- pd_sig %>%
+    filter(group == i) %>%
     pull(peptide)
   
-  fp_f = fp_sig %>% 
-    filter(group == i) %>% 
+  fp_f <- fp_sig %>%
+    filter(group == i) %>%
     pull(peptide)
   
+  sage_f <- sage_sig %>%
+    filter(group == i) %>%
+    pull(peptide)
   
-  x <- list(Peaks=peaks_f,
-          PD=pd_f,
-          Fragpipe = fp_f)
+  x <- list(
+    PEAKS = peaks_f,
+    PD = pd_f,
+    FragPipe = fp_f,
+    Sage = sage_f
+  )
   
- p1 =  ggVennDiagram(x,label_size = 3)+
-    ggtitle(gsub("[0-9].*","",i))+
-   scale_fill_distiller(palette = "GnBu")+
-   theme(legend.position = "none",
-         plot.title = element_text(size = 10,hjust = 0.5))
-
- plot_list[[i]] <- p1
+  p1 <- ggVennDiagram(x, label_size = 3) +
+    ggtitle(gsub("[0-9].*", "", i)) +
+    scale_fill_distiller(palette = "GnBu") +
+    theme(
+      legend.position = "none",
+      plot.title = element_text(size = 10, hjust = 0.5)
+    )
   
+  plot_list[[i]] <- p1
 }
 
-S1b = ggpubr::ggarrange(plot_list[[1]],plot_list[[2]],plot_list[[3]],plot_list[[4]],ncol = 1)
+################################################################################
+# Arrange and export
+################################################################################
 
-S1b
+S3b <- ggpubr::ggarrange(
+  plot_list[[1]],
+  plot_list[[2]],
+  plot_list[[3]],
+  plot_list[[4]],
+  ncol = 1
+)
 
-ggsave("../supplemental/S1_proteome_software_comparisons/S1b.pdf",S1b, height = 9, width = 2)
+S3b
+
+ggsave(
+  "../supplemental/S3_proteome_software_comparisons/S3b.pdf",
+  S3b, height = 9, width = 3
+) 
 ```
 
 
@@ -377,7 +492,7 @@ ggsave("../supplemental/S1_proteome_software_comparisons/S1b.pdf",S1b, height = 
 ```{r,fig.width = 9, fig.height=6}
 peaks_cleavages = plot_cleavages_per_pos(peaks_sig)
 
-S1c1 = peaks_cleavages+
+S3c1 = peaks_cleavages+
   ggtitle("Peaks Studio")+
   facet_wrap(~condition,ncol = 1,scale = "free_y")+
   theme(legend.position = "none")+
@@ -388,7 +503,7 @@ S1c1 = peaks_cleavages+
 pd_cleavages = plot_cleavages_per_pos(pd_sig)
 
 
-S1c2 = pd_cleavages+
+S3c2 = pd_cleavages+
   ggtitle("Proteome Discoverer")+
   facet_wrap(~condition,ncol = 1,scale = "free_y")+
   theme(legend.position = "none")+
@@ -399,7 +514,7 @@ S1c2 = pd_cleavages+
 
 fp_cleavages = plot_cleavages_per_pos(fp_sig)
 
-S1c3 = fp_cleavages+
+S3c3 = fp_cleavages+
   ggtitle("Fragpipe")+
   facet_wrap(~condition,ncol = 1,scale = "free_y")+
   theme(legend.position = "none")+
@@ -408,46 +523,81 @@ S1c3 = fp_cleavages+
           axis.title = element_text(size = 10))+
     scale_color_viridis_d()
 
+sage_cleavages = plot_cleavages_per_pos(sage_sig)
+S3c4 = sage_cleavages+
+  ggtitle("Sage")+
+  facet_wrap(~condition,ncol = 1,scale = "free_y")+
+  theme(legend.position = "none")+
+    scale_x_continuous(breaks = 1:14)+
+    theme(plot.title = element_text(hjust = 0.5,size = 10),
+          axis.title = element_text(size = 10))+
+    scale_color_viridis_d()
 
-S1c = ggpubr::ggarrange(S1c1,S1c2,S1c3,ncol = 3)
 
-S1c
+S3c = ggpubr::ggarrange(S1c1,S1c2,S1c3,S1c4,ncol = 4)
 
-ggsave("../supplemental/S1_proteome_software_comparisons/S1c.pdf",S1c,width = 6, height = 9)
+S3c
+
+ggsave("../supplemental/S3_proteome_software_comparisons/S3c.pdf",S3c,width = 6, height = 9)
 ```
 
-#S2 Icelogo comparison 
+#S4 Icelogo comparison 
 
 ### IceLogo Comparisons
 
 ```{r,fig.height = 11,fig.width = 8}
+
+peaks_sig$condition <- factor(
+  peaks_sig$condition,
+  levels = c("cathepsin_A", "cathepsin_B", "cathepsin_C", "cathepsin_D")
+)
+
 peaks_icelogos = plot_all_icelogos(peaks_sig) %>% 
   ggpubr::annotate_figure(top = "Peaks")
+
+
+pd_sig$condition <- factor(
+  pd_sig$condition,
+  levels = c("cathepsin_A", "cathepsin_B", "cathepsin_C", "cathepsin_D")
+)
 
 
 pd_icelogos = plot_all_icelogos(pd_sig)%>% 
   ggpubr::annotate_figure(top = "Proteome Discoverer")
 
+fp_sig$condition <- factor(
+  fp_sig$condition,
+  levels = c("cathepsin_A", "cathepsin_B", "cathepsin_C", "cathepsin_D")
+)
+
+
 
 fp_icelogos = plot_all_icelogos(fp_sig) %>% 
   ggpubr::annotate_figure(top = "Fragpipe")
 
+sage_sig$condition <- factor(
+  sage_sig$condition,
+  levels = c("cathepsin_A", "cathepsin_B", "cathepsin_C", "cathepsin_D")
+)
 
 
-S2 = ggpubr::ggarrange(peaks_icelogos,pd_icelogos,fp_icelogos,common.legend = TRUE,ncol = 3)
+sage_icelogos = plot_all_icelogos(sage_sig) %>% 
+  ggpubr::annotate_figure(top = "Sage")
 
-S2
+S4 = ggpubr::ggarrange(peaks_icelogos,pd_icelogos,fp_icelogos,sage_icelogos,common.legend = TRUE,ncol = 4)
 
-ggsave("../supplemental/S2_proteome_software_icelogos/S2_input.pdf",S2, width =8, height = 11)
+S4
+
+ggsave("../supplemental/S4_proteome_software_icelogos/S4_input.pdf",S2, width =8, height = 11)
 ```
 
 
-## Figure S3- Size of Peptides Detected by Each Search Engine
+## Figure S5- Size of Peptides Detected by Each Search Engine
 
 ```{r,fig.height = 6, fig.width = 8}
 
 ## Significant Peptides
-comb = bind_rows(peaks_sig,pd_sig,fp_sig) %>% 
+comb = bind_rows(peaks_sig,pd_sig,fp_sig,sage_sig) %>% 
   group_by(peptide_length,condition,tool) %>% 
   summarise(n = n())
 
@@ -476,7 +626,12 @@ fp_sum_l = mspms_tidy(fp_processed,"peptides") %>%
     filter(!is.na(peptides)) %>% 
   mutate(software = "Fragpipe")
 
-comb_2 = bind_rows(peaks_sum_l,pd_sum_l,fp_sum_l) %>% 
+
+sage_sum_l = mspms_tidy(sage_processed,"peptides") %>% 
+    filter(!is.na(peptides)) %>% 
+  mutate(software = "Sage")
+
+comb_2 = bind_rows(peaks_sum_l,pd_sum_l,fp_sum_l,sage_sum_l) %>% 
   group_by(peptide_length,condition,software) %>% 
   summarise(n = n())
 
@@ -490,65 +645,17 @@ p2 = comb_2 %>%
         plot.title = element_text(hjust = 0.5))
 
 
-S3 = ggpubr::ggarrange(p1,p2,common.legend = TRUE,legend = "bottom")
-
-S3
-
-ggsave("../supplemental/S3_proteome_software_peptide_lengths/S3.pdf",S3, width = 8, height = 6)
-```
-
-
-## Figure S4- QC checks
-
-### A - Full length peptide library detected at T0
-
-```{r,fig.height = 5.5, fig.width = 8}
-
-S4a = plot_qc_check(peaks_processed_qf) +
-  theme(legend.position = "bottom")
-
-ggsave("../supplemental/S4_qc_checks/S4a.pdf",S4a,width = 8,
-       height = 5.5)
-
-S4a
-```
-
-
-```{r,fig.height = 5.5, fig.width = 8}
-nd_peptides = plot_nd_peptides(peaks_processed_qf)
-
-S4b = plot_nd_peptides(peaks_processed_qf)
-
-S4b
-
-ggsave("../supplemental/S4_qc_checks/S4b.pdf",S4b,width = 8,
-       height = 5.5)
-```
-
-
-## Figure S5 - Number of signficant peptides per incubation time.
-
-```{r,fig.height =4, fig.width = 5}
-
-sum = sig %>% 
-  group_by(condition,time) %>% 
-  summarise(n = n())
-
-S5 = sum %>% 
-  ggplot(aes(time,n,color = condition))+
-  geom_point()+
-  geom_line(aes(group = condition))+
-  viridis::scale_color_viridis(discrete = TRUE)+
-  theme(legend.position = "bottom")+
-  xlab("Time (minutes)")+
-  ylab("Number of Peptides")
+S5 = ggpubr::ggarrange(p1,p2,common.legend = TRUE,legend = "bottom")
 
 S5
 
-ggsave("../supplemental/S5_sig_peptides_over_time/S5.pdf",S5,width = 5, height = 4)
-
-
+ggsave("../supplemental/S5_proteome_software_peptide_lengths/S5.pdf",S3, width = 8, height = 6)
 ```
+
+
+
+
+
 
 
 
@@ -557,7 +664,7 @@ ggsave("../supplemental/S5_sig_peptides_over_time/S5.pdf",S5,width = 5, height =
 ```{r,,fig.height = 11,fig.width = 6}
 # Running mspms with 6 residues to the left and right of the cleavage site reported
 peaks_prepared_6 = prepare_peaks(lfq_filepath = "../data/proteomics/peaks_protein-peptides-lfq.csv",
-                                   colData = "../data/proteomics/colData.csv",
+                                   colData = "../data/proteomics/colData_limma.csv",
                                    n_residues = 6)
 
 # Calculating all possible cleavages 6 AAs to the left and right of the cleavage
@@ -567,9 +674,9 @@ cleavage_6 = mspms::calculate_all_cleavages(mspms::peptide_library$library_real_
 
 peaks_processed_6 = process_qf(peaks_prepared_6)
 
-peaks_ttest_6 = log2fc_t_test(peaks_processed_6)
+peaks_stats_6 = limma_stats(peaks_processed_6)
 
-peaks_sig_6 = peaks_ttest_6 %>% 
+peaks_sig_6 = peaks_stats_6 %>% 
   filter(p.adj <= 0.05, 
          log2fc >= 3)
 
@@ -599,32 +706,3 @@ generate_report(peaks_prepared_data,
 ```
 
 
-# Extra Stuff
-
-## What MBR setting would be best to use for Fragpipe? 
-
-Here we compared no MBR, a MBR across 3 runs, and MBR across 41 runs. 
-
-```{r}
-no_mbr = prepare_fragpipe("../data/proteomics/fragpipe_sub_analysis/combined_peptide_no_mbr.tsv",
-                               "../data/proteomics/colData.csv") %>%
-  process_qf()
-
-  
-mbr_3 = prepare_fragpipe("../data/proteomics/fragpipe_sub_analysis/combined_peptide_mbr_3.tsv",
-                               "../data/proteomics/colData.csv") %>%
-  process_qf()
-  
-mbr_41 = prepare_fragpipe("../data/proteomics/fragpipe_sub_analysis/combined_peptide_mbr_41.tsv",
-                               "../data/proteomics/colData.csv") %>%
-  process_qf()
-
-library(DEP)
-
-plot_missval(no_mbr[["peptides"]])
-plot_missval(mbr_3[["peptides"]])
-plot_missval(mbr_41[["peptides"]])
-
-```
-
-Based on this patterning, I think that it makes the most sense to used MBR- 3.
